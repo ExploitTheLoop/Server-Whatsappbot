@@ -48,7 +48,7 @@ PORT=3000
 ## 🏃‍♂️ Running the Bot
 
 ```bash
-node index.js
+node server.js
 ```
 
 Once the server is running, visit:
