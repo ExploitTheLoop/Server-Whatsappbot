@@ -338,6 +338,13 @@ function initializeWhatsAppClient(sessionId, config) {
     try {
       if (msg.from === msg.to || msg.isStatus) return;
 
+      const session = sessions[sessionId];
+      if (!session?.botActive) {
+        console.log(`🛑 Bot is paused for session ${sessionId}. Ignoring message from ${msg.from}.`);
+        return; // Skip reply if bot is turned off
+      }
+  
+
       const replyWithDelay = async (reply, delayMs = 1000, isAudio = false) => {
         await new Promise(resolve => setTimeout(resolve, delayMs));
         if (isAudio && config.elevenLabsApiKey && config.elevenLabsVoiceId) {
@@ -385,22 +392,20 @@ function initializeWhatsAppClient(sessionId, config) {
     }
   });
 
+
   client.on('disconnected', async (reason) => {
     console.warn(`❌ Disconnected for session ${sessionId}: ${reason}`);
     const disconnectedNumber = sessions[sessionId]?.whatsappNumber;
     if (disconnectedNumber && connectedNumbers[disconnectedNumber] === sessionId) {
-      delete connectedNumbers[disconnectedNumber]; 
+        delete connectedNumbers[disconnectedNumber];
     }
     sessions[sessionId].status = 'disconnected';
     delete sessions[sessionId].client;
     await fs.writeFile(path.join(sessionsDir, `${sessionId}.json`), JSON.stringify(config, null, 2));
-    setTimeout(() => {
-      if (sessions[sessionId]?.status === 'disconnected') {
-        delete sessions[sessionId];
-        fs.unlink(path.join(sessionsDir, `${sessionId}.json`)).catch(() => {});
-        console.log(`Cleaned up session ${sessionId}`);
-      }
-    }, 60 * 60 * 1000);
+
+    delete sessions[sessionId]; // Delete the session object from memory
+
+    console.log(`Session ${sessionId} marked as disconnected and removed from memory.`);
   });
 
   client.initialize();
@@ -435,7 +440,7 @@ app.post('/api/start-bot', async (req, res) => {
     }
       
     await fs.writeFile(path.join(sessionsDir, `${sessionId}.json`), JSON.stringify(config, null, 2));
-    sessions[sessionId] = { config, status: 'connecting', qrCode: '', conversationHistory: {} };
+    sessions[sessionId] = { config, status: 'connecting', qrCode: '', conversationHistory: {}, botActive: true };
     initializeWhatsAppClient(sessionId, config);
     res.json({ sessionId });
   } catch (err) {
@@ -533,6 +538,37 @@ app.post('/api/disconnect/:sessionId', async (req, res) => {
   }
 });
 
+
+// Turn bot ON
+app.post('/api/bot-on/:sessionId', async (req, res) => {
+  const { sessionId } = req.params;
+  const session = sessions[sessionId];
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  session.botActive = true;
+  res.json({ success: true, message: 'Bot is now active (responding).' });
+});
+
+// Turn bot OFF
+app.post('/api/bot-off/:sessionId', async (req, res) => {
+  const { sessionId } = req.params;
+  const session = sessions[sessionId];
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  session.botActive = false;
+  res.json({ success: true, message: 'Bot is now paused (not responding).' });
+});
+
+app.get('/api/bot-status/:sessionId', async (req, res) => {
+  const { sessionId } = req.params;
+  const session = sessions[sessionId];
+  if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+  }
+  res.json({ sessionId: sessionId, botActive: session.botActive });
+});
 
 // Cleanup inactive sessions
 setInterval(async () => {
