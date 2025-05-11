@@ -24,7 +24,7 @@ The control panel interface displays:
 
 Below is a screenshot of the control panel:
 
-![Control Panel Screenshot](images/screenshot.png)
+![Control Panel Screenshot](Untitled.png)
 
 ## Getting Started
 
